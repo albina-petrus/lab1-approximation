@@ -121,10 +121,12 @@
 
     // Діаграма залишків (вісь X синхронізована з головним графіком)
     let rs = rsrc.rs;
-    if (frame && frame.type === 'lsm') rs = pts.map(p => p.y - frame.curve(p.x));
+    // під час росту полінома штрихи залишків ще приховані; масштаб — за остаточними залишками
+    if (frame && frame.type === 'lsm') rs = frame.fractions ? pts.map(p => p.y - frame.curve(p.x)) : rsrc.rs.map(() => 0);
     if (frame && frame.type === 'lagrange') rs = pts.map((p, i) => (i < frame.visibleCount ? p.y - frame.curve(p.x) : 0));
     const rMax = Math.max(...rs.map(Math.abs));
-    const rLim = rMax < 1e-9 ? 1 : rMax * 1.3;
+    const rScale = frame && frame.type === 'lsm' ? Math.max(rMax, ...rsrc.rs.map(Math.abs)) : rMax;
+    const rLim = rScale < 1e-9 ? 1 : rScale * 1.3;
     residPlot.setViewport({ xMin: shownVp.xMin, xMax: shownVp.xMax, yMin: -rLim, yMax: rLim });
     residPlot.clear();
     residPlot.drawGrid('x', 'r');
