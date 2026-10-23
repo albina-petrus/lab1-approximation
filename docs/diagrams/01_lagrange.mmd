@@ -1,0 +1,15 @@
+flowchart TD
+    A([Початок: lagrange xs, ys, x]) --> B["Нормалізація: u_i = (x_i − mid)/half, u = (x − mid)/half"]
+    B --> C["sum = 0, k = 0"]
+    C --> D{"k < n ?"}
+    D -- Так --> E["L = 1, j = 0"]
+    E --> F{"j < n ?"}
+    F -- Так --> G{"j ≠ k ?"}
+    G -- Так --> H["L = L · (u − u_j) / (u_k − u_j)"]
+    G -- Ні --> I["j = j + 1"]
+    H --> I
+    I --> F
+    F -- Ні --> J["sum = sum + y_k · L"]
+    J --> K["k = k + 1"]
+    K --> D
+    D -- Ні --> L([Повернути P = sum])
