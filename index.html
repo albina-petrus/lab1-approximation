@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ЛР1 — Інтерполяція та МНК (варіант 22)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Апроксимація функцій: інтерполяція та МНК</h1>
+      <p class="subtitle">Лабораторна робота №1 · Варіант 22 · Петрус А. А., ІПЗ-2</p>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="main" role="tab">Основний графік</button>
+      <button class="tab" data-view="compare" role="tab">Порівняння 5 / 10 / 20 (6 графіків)</button>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <!-- ===== Бічна панель керування ===== -->
+    <aside class="sidebar">
+      <section class="group">
+        <h2>1. Набір точок</h2>
+        <div class="seg" id="datasetSwitch">
+          <button data-set="5" class="active">5 точок</button>
+          <button data-set="9">10 точок</button>
+          <button data-set="20">20 точок</button>
+        </div>
+        <p class="hint" id="datasetNote">Набір на «10 точок» з файлу варіантів містить 9 точок.</p>
+        <label class="lbl" for="pointsInput">Точки (x; y) — кожна з нового рядка:</label>
+        <textarea id="pointsInput" rows="6" spellcheck="false"></textarea>
+        <div class="row">
+          <button id="applyPoints" class="btn primary">Застосувати</button>
+          <span id="inputError" class="error"></span>
+        </div>
+        <label class="check"><input type="checkbox" id="noiseToggle"> Додати шум вимірювань ±2%</label>
+      </section>
+
+      <section class="group">
+        <h2>2. Режим відображення</h2>
+        <div class="seg" id="modeSwitch">
+          <button data-mode="interp">Інтерполяція</button>
+          <button data-mode="lsm">МНК</button>
+          <button data-mode="all" class="active">Усі</button>
+        </div>
+        <label class="lbl">Форма інтерполяційного полінома:</label>
+        <div class="seg" id="methodSwitch">
+          <button data-method="lagrange" class="active">Лагранж</button>
+          <button data-method="newton">Ньютон</button>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>3. Ступінь МНК</h2>
+        <div class="seg" id="degreeSwitch">
+          <button data-m="1">m = 1</button>
+          <button data-m="2" class="active">m = 2</button>
+          <button data-m="3">m = 3</button>
+          <button data-m="4">m = 4</button>
+        </div>
+        <label class="check"><input type="checkbox" id="allDegrees"> Показати всі ступені m = 1..4</label>
+      </section>
+
+      <section class="group">
+        <h2>4. Анімація</h2>
+        <div class="row wrap">
+          <button id="animInterp" class="btn">▶ Інтерполяція</button>
+          <button id="animLsm" class="btn">▶ МНК</button>
+        </div>
+        <div class="row wrap">
+          <button id="animPause" class="btn" disabled>⏸ Пауза</button>
+          <button id="animReset" class="btn danger" disabled>⏹ Скинути</button>
+        </div>
+        <label class="lbl" for="speed">Швидкість: <span id="speedVal">1.0×</span></label>
+        <input type="range" id="speed" min="0.25" max="3" step="0.25" value="1">
+        <p class="status" id="animStatus">Анімація не запущена</p>
+      </section>
+    </aside>
+
+    <!-- ===== Основний графік ===== -->
+    <main class="content" id="viewMain">
+      <div class="card">
+        <div class="card-head">
+          <h3>Графік: вузли, інтерполяція, МНК</h3>
+          <span class="badge" id="vpBadge"></span>
+        </div>
+        <div class="canvas-wrap main-wrap">
+          <canvas id="mainCanvas"></canvas>
+          <div id="tooltip" class="tooltip hidden"></div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Діаграма залишків r<sub>i</sub> = y<sub>i</sub> − ŷ<sub>i</sub></h3>
+          <span class="badge" id="residBadge"></span>
+        </div>
+        <div class="canvas-wrap resid-wrap">
+          <canvas id="residCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>Метрики якості</h3>
+          <div class="table-scroll"><table id="metricsTable"></table></div>
+          <p class="hint">SSE = Σr², RMSE = √(SSE/N), R² = 1 − SSE/SST. Коефіцієнти — QR-розкладом Хаусхолдера.</p>
+        </div>
+        <div class="card">
+          <h3>Таблиця поділених різниць Ньютона</h3>
+          <div class="table-scroll"><table id="newtonTable" class="mono"></table></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== Порівняння: 6 графіків ===== -->
+    <main class="content hidden" id="viewCompare">
+      <div class="card">
+        <div class="card-head">
+          <h3>Миттєве порівняння наборів 5 / 10 / 20 точок</h3>
+          <span class="hint" id="compareNote"></span>
+        </div>
+        <div class="compare-grid">
+          <div class="mini"><canvas data-kind="interp" data-set="5"></canvas></div>
+          <div class="mini"><canvas data-kind="interp" data-set="9"></canvas></div>
+          <div class="mini"><canvas data-kind="interp" data-set="20"></canvas></div>
+          <div class="mini"><canvas data-kind="lsm" data-set="5"></canvas></div>
+          <div class="mini"><canvas data-kind="lsm" data-set="9"></canvas></div>
+          <div class="mini"><canvas data-kind="lsm" data-set="20"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Зведена таблиця метрик</h3>
+        <div class="table-scroll"><table id="compareTable"></table></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Звичайні скрипти (не ES-модулі): сторінка відкривається подвійним кліком без сервера -->
+  <script src="js/data.js"></script>
+  <script src="js/lagrange.js"></script>
+  <script src="js/lsq.js"></script>
+  <script src="js/plot.js"></script>
+  <script src="js/animation.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
