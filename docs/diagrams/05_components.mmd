@@ -1,0 +1,32 @@
+flowchart TB
+    U((Користувач))
+    subgraph Представлення
+        UI["index.html + style.css<br/>панель керування, легенда, таблиці, підказка"]
+        CV["Canvas<br/>основний графік і залишки"]
+    end
+    subgraph Контролер
+        M["main.js<br/>стан, події, оркестрація"]
+    end
+    subgraph Дані
+        D["data.js<br/>набори варіанта 22, парсер, шум"]
+    end
+    subgraph Математичне ядро
+        L["lagrange.js<br/>Лагранж, барицентрична форма, Ньютон"]
+        Q["lsq.js<br/>Вандермонд, QR Хаусхолдера, метрики"]
+    end
+    subgraph Графічний рушій
+        P["plot.js<br/>автомасштаб, сітка, криві, залишки"]
+        A["animation.js<br/>requestAnimationFrame"]
+    end
+    U --> UI
+    U --> CV
+    UI --> M
+    M --> UI
+    M --> D
+    M --> L
+    M --> Q
+    M --> P
+    M --> A
+    A -. кадр .-> M
+    A -. horner .-> Q
+    P --> CV

@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    actor U as Користувач
+    participant UI as UI (index.html)
+    participant M as main.js
+    participant D as data.js
+    participant L as lagrange.js
+    participant Q as lsq.js
+    participant P as plot.js
+    participant A as animation.js
+    participant C as Canvas
+    U->>UI: Обирає набір 5 / 10 / 20 або вводить точки
+    UI->>M: click / «Застосувати»
+    M->>D: getDataset(key) / parsePoints(text)
+    D-->>M: points[]
+    M->>L: createLagrange / createNewton, dividedDifferences
+    L-->>M: P(x), таблиця різниць
+    M->>Q: fitLSM(points, m), m = 1..4
+    Q-->>M: коефіцієнти, ŷ, rᵢ, метрики
+    M->>P: computeViewport(points, криві)
+    M->>P: drawGrid, drawCurve, drawPoints, drawStems
+    P->>C: Canvas 2D API
+    U->>UI: «▶ МНК»
+    UI->>M: click
+    M->>A: startLSM(points, fit)
+    loop кожен кадр requestAnimationFrame
+        A-->>M: onFrame(стан кадру)
+        M->>P: lerpViewport + перемальовування
+        P->>C: кадр
+    end
+    U->>C: mousemove
+    C->>M: координати курсора
+    M->>UI: підказка (x, y, ŷ, rᵢ)
