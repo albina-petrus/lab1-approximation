@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Тести — ЛР1 (варіант 22)</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #111827; }
+    h1 { font-size: 20px; }
+    .pass { color: #15803d; } .fail { color: #b91c1c; font-weight: 600; }
+    table { border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { border: 1px solid #e5e7eb; padding: 4px 10px; text-align: right; }
+    th { background: #f9fafb; } td:first-child, td:nth-child(2) { text-align: left; }
+    #summary { font-weight: 700; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>Аналітичне тестування математичного ядра</h1>
+  <div id="summary"></div>
+  <ol id="results"></ol>
+  <h2>Порівняльний аналіз наборів 5 / 9 / 20 точок</h2>
+  <table id="cmp"></table>
+  <h2>Ті самі набори з шумом ±2% (демонстрація ефекту Рунге та залишків)</h2>
+  <table id="cmpNoise"></table>
+
+  <script src="js/data.js"></script>
+  <script src="js/lagrange.js"></script>
+  <script src="js/lsq.js"></script>
+  <script>
+  'use strict';
+  const results = [];
+  function test(name, fn) {
+    try { const msg = fn(); results.push({ name, ok: true, msg: msg || '' }); }
+    catch (e) { results.push({ name, ok: false, msg: e.message }); }
+  }
+  function close(a, b, tol, what) {
+    if (!(Math.abs(a - b) <= tol)) throw new Error(`${what}: ${a} ≠ ${b} (допуск ${tol})`);
+  }
+  const SETS = { 5: Data.getDataset(5), 9: Data.getDataset(9), 20: Data.getDataset(20) };
+  const EXACT = { 5: [0, 0, 1], 9: [1, 0.5, 0.5], 20: [1.5, 0.2, 0.8] }; // b0, b1, b2
+
+  // 1. Інтерполяція проходить через усі вузли (обидві форми + класична формула)
+  Object.entries(SETS).forEach(([k, pts]) => {
+    test(`Лагранж / Ньютон проходять через усі ${pts.length} вузлів`, () => {
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+      const L = Interp.createLagrange(xs, ys), N = Interp.createNewton(xs, ys);
+      let maxErr = 0;
+      pts.forEach(p => {
+        maxErr = Math.max(maxErr, Math.abs(L(p.x) - p.y), Math.abs(N(p.x) - p.y), Math.abs(Interp.lagrange(xs, ys, p.x) - p.y));
+      });
+      close(maxErr, 0, 1e-8, 'max похибка у вузлах');
+      return `max похибка = ${maxErr.toExponential(2)}`;
+    });
+  });
+
+  // 2. Лагранж і Ньютон — той самий поліном між вузлами
+  test('Форми Лагранжа і Ньютона збігаються між вузлами (20 точок)', () => {
+    const pts = SETS[20], xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const L = Interp.createLagrange(xs, ys), N = Interp.createNewton(xs, ys);
+    let maxD = 0;
+    for (let x = 0.1; x < 9.5; x += 0.37) maxD = Math.max(maxD, Math.abs(L(x) - N(x)));
+    close(maxD, 0, 1e-6, 'max |L − N|');
+    return `max |L − N| = ${maxD.toExponential(2)}`;
+  });
+
+  // 3. Набори точно квадратичні → МНК m = 2 відновлює коефіцієнти, залишки ≈ 0
+  Object.entries(SETS).forEach(([k, pts]) => {
+    test(`МНК m = 2 відновлює закон для ${pts.length} точок`, () => {
+      const f = LSQ.fitLSM(pts, 2);
+      EXACT[k].forEach((c, i) => close(f.coefX[i], c, 1e-8, `b${i}`));
+      close(f.metrics.maxAbs, 0, 1e-9, 'max|r|');
+      return LSQ.equationString(f.coefX) + `, max|r| = ${f.metrics.maxAbs.toExponential(2)}`;
+    });
+  });
+
+  // 4. МНК при m = n − 1 збігається з інтерполяцією (5 точок, m = 4)
+  test('МНК m = n − 1 = 4 збігається з інтерполяцією (5 точок)', () => {
+    const pts = SETS[5], xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const noisy = Data.addNoise(pts, 0.02, 7);
+    const f = LSQ.fitLSM(noisy, 4), L = Interp.createLagrange(noisy.map(p => p.x), noisy.map(p => p.y));
+    let maxD = 0;
+    for (let x = 1; x <= 5; x += 0.1) maxD = Math.max(maxD, Math.abs(f.predict(x) - L(x)));
+    close(maxD, 0, 1e-8, 'max |МНК − Лагранж|');
+    return `max різниця = ${maxD.toExponential(2)}`;
+  });
+
+  // 5. QR: Qᵀ ортогональне перетворення зберігає норму y; R верхньотрикутна
+  test('QR Хаусхолдера: R верхньотрикутна, ‖d‖ = ‖y‖', () => {
+    const pts = SETS[20];
+    const toU = x => (x - 4.75) / 4.75;
+    const A = LSQ.designMatrix(pts.map(p => toU(p.x)), 4);
+    const y = pts.map(p => p.y);
+    const { R, d } = LSQ.householderQR(A, y);
+    let below = 0;
+    for (let i = 0; i < R.length; i++) for (let j = 0; j < Math.min(i, 5); j++) below = Math.max(below, Math.abs(R[i][j]));
+    close(below, 0, 1e-10, 'елементи під діагоналлю');
+    const ny = Math.hypot(...y), nd = Math.hypot(...d);
+    close(nd, ny, 1e-9 * ny, '‖d‖');
+    return `max|R нижче діагоналі| = ${below.toExponential(2)}`;
+  });
+
+  // 6. m = 1 (пряма) для квадратичних даних має помітні залишки, а сума залишків = 0
+  test('МНК m = 1: залишки ненульові, Σr = 0 (є вільний член)', () => {
+    const f = LSQ.fitLSM(SETS[9], 1);
+    if (f.metrics.maxAbs < 0.5) throw new Error('очікувались помітні залишки');
+    const s = f.residuals.reduce((a, b) => a + b, 0);
+    close(s, 0, 1e-9, 'Σr');
+    return `max|r| = ${f.metrics.maxAbs.toFixed(3)}, Σr = ${s.toExponential(2)}`;
+  });
+
+  // 7. Валідація вводу
+  test('Валідатор відхиляє повторні x і нечислові значення', () => {
+    if (Data.parsePoints('1; 2\n1; 3').ok) throw new Error('повторний x пропущено');
+    if (Data.parsePoints('1; a\n2; 3').ok) throw new Error('нечислове значення пропущено');
+    const ok = Data.parsePoints('(2, 4)\n(1, 1)\n3 9');
+    if (!ok.ok || ok.points[0].x !== 1) throw new Error('коректний ввід не прийнято / не відсортовано');
+    return 'ok';
+  });
+
+  // Порівняльна таблиця
+  function cmpTable(id, noise) {
+    let html = '<tr><th>Набір</th><th>Модель</th><th>SSE</th><th>RMSE</th><th>max|r|</th><th>R²</th><th>Час, мс</th><th>max|P(x)| на [x₀; xₙ]</th></tr>';
+    Object.entries(SETS).forEach(([k, pts0]) => {
+      const pts = noise ? Data.addNoise(pts0, 0.02, 22) : pts0;
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+      let t = performance.now();
+      let L; for (let r = 0; r < 200; r++) L = Interp.createLagrange(xs, ys);
+      const tL = (performance.now() - t) / 200;
+      const span = xs[xs.length - 1] - xs[0];
+      let peak = 0;
+      for (let i = 0; i <= 400; i++) { const x = xs[0] + span * i / 400; peak = Math.max(peak, Math.abs(L(x))); }
+      const im = LSQ.computeMetrics(ys, xs.map(L));
+      html += `<tr><td>${pts.length} точок</td><td>Інтерполяція (ст. ${pts.length - 1})</td><td>${im.sse.toExponential(2)}</td><td>${im.rmse.toExponential(2)}</td><td>${im.maxAbs.toExponential(2)}</td><td>${im.r2.toFixed(6)}</td><td>${tL.toFixed(4)}</td><td>${peak.toFixed(2)} (max|y| = ${Math.max(...ys.map(Math.abs)).toFixed(2)})</td></tr>`;
+      for (let m = 1; m <= 4; m++) {
+        t = performance.now();
+        let f; for (let r = 0; r < 200; r++) f = LSQ.fitLSM(pts, m);
+        const tm = (performance.now() - t) / 200;
+        const mt = f.metrics;
+        html += `<tr><td></td><td>МНК m = ${m}</td><td>${mt.sse.toExponential(2)}</td><td>${mt.rmse.toExponential(2)}</td><td>${mt.maxAbs.toExponential(2)}</td><td>${mt.r2.toFixed(6)}</td><td>${tm.toFixed(4)}</td><td></td></tr>`;
+      }
+    });
+    document.getElementById(id).innerHTML = html;
+  }
+  cmpTable('cmp', false);
+  cmpTable('cmpNoise', true);
+
+  const passed = results.filter(r => r.ok).length;
+  document.getElementById('summary').innerHTML = `Пройдено: <span class="${passed === results.length ? 'pass' : 'fail'}">${passed} / ${results.length}</span>`;
+  document.getElementById('results').innerHTML = results.map(r => `<li class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✔' : '✘'} ${r.name} — <small>${r.msg}</small></li>`).join('');
+  window.TEST_RESULTS = results;
+  </script>
+</body>
+</html>
